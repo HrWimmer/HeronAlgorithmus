@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 <style>
   body { background:#020617; }
   .glass-panel { background: rgba(15,23,42,0.4); border: 1px solid rgb(30,41,59); border-radius: 1rem; box-shadow: 0 8px 24px rgba(0,0,0,.25); }
@@ -34,7 +35,7 @@
   .sheet td.rownum { background: #0f172a; color: #64748b; font-size: 11px; text-align: center; width: 28px; }
   .sheet td.label { background: #111827; color: #cbd5e1; font-size: 12px; padding: 2px 6px; }
   .cell-input {
-    width: 100%; min-width: 78px; height: 26px; background: #020617; color: #e2e8f0;
+    width: 100%; min-width: 96px; height: 26px; background: #020617; color: #e2e8f0;
     font-family: ui-monospace, monospace; font-size: 12px; text-align: right; padding: 0 6px;
     border: none; outline: none; touch-action: manipulation;
   }
@@ -216,6 +217,14 @@
       <button id="btn-tried" class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-sm font-medium">Ich habe es ausprobiert ✓</button>
       <span id="tried-feedback" class="text-sm text-slate-400"></span>
     </div>
+
+    <div class="glass-panel p-4 bg-slate-900/60 space-y-2">
+      <p class="text-sm text-slate-300">Du kannst dir das fertige Rechenblatt auch als echte Excel-Musterlösung
+        herunterladen (Radikand 12, Startwert 4) — mit denselben Formeln, die du dir hier selbst erarbeitet hast.
+        Du kannst sie danach in Excel, LibreOffice Calc oder Google Sheets weiter öffnen und ausprobieren.</p>
+      <button id="btn-download-xlsx" class="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-sm font-medium">⭳ Musterlösung als Excel-Datei (.xlsx) herunterladen</button>
+    </div>
+
     <button id="btn-sec2c-next" data-task="tab-ausprobieren" onclick="unlockSection('sec-3');"
       class="hidden px-5 py-2.5 rounded-lg bg-yellow-600 hover:bg-yellow-500 font-medium text-slate-950">
       Weiter zur Verallgemeinerung →
@@ -551,6 +560,10 @@ document.getElementById('btn-tried').addEventListener('click', () => {
   ProgressTracker.solve('tab-ausprobieren');
   document.getElementById('btn-sec2c-next').classList.remove('hidden');
 });
+
+document.getElementById('btn-download-xlsx').addEventListener('click', () => {
+  if (window.downloadHeronExcel) window.downloadHeronExcel();
+});
 </script>
 
 <script>
@@ -658,7 +671,7 @@ document.getElementById('btn-tried').addEventListener('click', () => {
 <script>
 /* ============ SEC 2: Demo-Rechenblatt (fertig, nur G4 editierbar) ============ */
 (function () {
-  const fmtDE = (n) => (Math.abs(n) < 1e-9 ? 0 : n).toFixed(4).replace('.', ',');
+  const fmtDE = (n) => (Math.abs(n) < 1e-9 ? 0 : n).toFixed(8).replace('.', ',');
   const A = 7;
 
   const body = document.getElementById('demo-sheet-body');
@@ -769,7 +782,7 @@ document.getElementById('btn-tried').addEventListener('click', () => {
   const cells = {};
   let focusedCell = null;
   let valueCache = new Map();
-  const fmtDE = (n) => (Math.abs(n) < 1e-9 ? 0 : n).toFixed(4).replace('.', ',');
+  const fmtDE = (n) => (Math.abs(n) < 1e-9 ? 0 : n).toFixed(8).replace('.', ',');
 
   function parseDE(s) { return parseFloat(String(s).replace(',', '.')); }
 
@@ -1262,6 +1275,53 @@ document.getElementById('btn-tried').addEventListener('click', () => {
     recalcAll();
     checkDragFillComplete();
   };
+
+})();
+</script>
+
+<script>
+/* ============ Musterlösung als .xlsx-Datei (fest, unabhängig vom Browser-Zustand) ============ */
+(function () {
+  function downloadHeronMusterloesung() {
+    if (!window.XLSX) {
+      alert('Der Excel-Export konnte nicht geladen werden (keine Internetverbindung?). Bitte später erneut versuchen.');
+      return;
+    }
+    const A = 12, x1 = 4;
+
+    const aoa = [];
+    aoa[0] = ['Heron-Verfahren — Musterlösung'];
+    aoa[1] = ['Schritt', 'Seitenlänge x', 'Seitenlänge y'];
+    const formulaCells = [];
+    let x = x1;
+    for (let r = 3; r <= 13; r++) {
+      const y = A / x;
+      const bFormula = r === 3 ? 'G4' : `(B${r - 1}+C${r - 1})/2`;
+      formulaCells.push({ ref: 'B' + r, f: bFormula, v: x });
+      formulaCells.push({ ref: 'C' + r, f: `G$3/B${r}`, v: y });
+
+      const row = [];
+      row[0] = r - 2;
+      row[1] = null; row[2] = null; row[3] = null; row[4] = null;
+      row[5] = r === 3 ? 'Radikand A' : r === 4 ? 'Startwert x' : null;
+      row[6] = r === 3 ? A : r === 4 ? x1 : null;
+      aoa[r - 1] = row;
+
+      x = (x + y) / 2;
+    }
+
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    formulaCells.forEach(({ ref, f, v }) => { ws[ref] = { t: 'n', f, v }; });
+    ws['!cols'] = [{ wch: 8 }, { wch: 15 }, { wch: 15 }, { wch: 2 }, { wch: 2 }, { wch: 12 }, { wch: 10 }];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Heron-Verfahren');
+    // bookSST erzwingt eine echte Shared-Strings-Tabelle statt Inline-Strings —
+    // manche (ältere) Excel-Versionen prüfen das strenger und meldeten sonst
+    // "Problem mit Inhalten erkannt", obwohl Excel 365 die Datei anstandslos öffnete.
+    XLSX.writeFile(wb, `Heron-Musterloesung_A${A}.xlsx`, { bookSST: true });
+  }
+  window.downloadHeronExcel = downloadHeronMusterloesung;
 })();
 </script>
 
